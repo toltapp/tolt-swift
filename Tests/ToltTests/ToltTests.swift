@@ -61,6 +61,12 @@ final class ToltTests: XCTestCase {
         XCTAssertNotNil(StubProtocol.lastBody?["first_seen_at"] as? String)
     }
 
+    func testSendsTheAppUserIdUnchanged() async throws {
+        StubProtocol.handler = { _ in (200, #"{"success":true,"data":{"status":"claimed","app_user_id":" user_42 "}}"#) }
+        _ = try await tolt.claim(code: "A", appUserId: " user_42 ")
+        XCTAssertEqual(StubProtocol.lastBody?["app_user_id"] as? String, " user_42 ")
+    }
+
     func testAlreadyClaimedIsNotAnError() async throws {
         StubProtocol.handler = { _ in (200, #"{"success":true,"data":{"status":"already_claimed","app_user_id":"u"}}"#) }
         let result = try await tolt.claim(code: "A", appUserId: "u")

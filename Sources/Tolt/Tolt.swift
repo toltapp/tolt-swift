@@ -38,16 +38,15 @@ public final class Tolt: @unchecked Sendable {
     func claim(code: String, appUserId: String) async throws -> ClaimResult {
         let (publicId, baseURL, session, firstSeenAt) = try snapshot()
         let trimmedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedUser = appUserId.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedCode.isEmpty else { throw ToltError.invalidInput("code") }
-        guard !trimmedUser.isEmpty else { throw ToltError.invalidInput("appUserId") }
+        guard !appUserId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ToltError.invalidInput("appUserId") }
 
         var request = URLRequest(url: baseURL.appendingPathComponent("client/claims"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(ClaimRequest(
             publicId: publicId,
-            appUserId: trimmedUser,
+            appUserId: appUserId,
             code: trimmedCode,
             firstSeenAt: ISO8601DateFormatter().string(from: firstSeenAt)
         ))
