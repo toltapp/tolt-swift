@@ -21,6 +21,14 @@ public final class Tolt: @unchecked Sendable {
         try await shared.claim(code: code, appUserId: appUserId)
     }
 
+    public static func claim(clickId: String, appUserId: String) async throws -> ClaimResult {
+        try await shared.claim(clickId: clickId, appUserId: appUserId)
+    }
+
+    public static func claim(url: URL, appUserId: String) async throws -> ClaimResult? {
+        try await shared.claim(url: url, appUserId: appUserId)
+    }
+
     public static func revenueCatAttributes(code: String) -> [String: String] {
         [codeAttribute: code.trimmingCharacters(in: .whitespacesAndNewlines)]
     }
@@ -36,9 +44,24 @@ public final class Tolt: @unchecked Sendable {
     }
 
     func claim(code: String, appUserId: String) async throws -> ClaimResult {
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw ToltError.invalidInput("code") }
+        return try await claim(.code(trimmed), appUserId: appUserId)
+    }
+
+    func claim(clickId: String, appUserId: String) async throws -> ClaimResult {
+        let trimmed = clickId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw ToltError.invalidInput("clickId") }
+        return try await claim(.click(trimmed), appUserId: appUserId)
+    }
+
+    func claim(url: URL, appUserId: String) async throws -> ClaimResult? {
+        guard let reference = ClaimReference(url: url) else { return nil }
+        return try await claim(reference, appUserId: appUserId)
+    }
+
+    private func claim(_ reference: ClaimReference, appUserId: String) async throws -> ClaimResult {
         let (publicId, baseURL, session, firstSeenAt) = try snapshot()
-        let trimmedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedCode.isEmpty else { throw ToltError.invalidInput("code") }
         guard !appUserId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ToltError.invalidInput("appUserId") }
 
         var request = URLRequest(url: baseURL.appendingPathComponent("client/claims"))
@@ -47,7 +70,7 @@ public final class Tolt: @unchecked Sendable {
         request.httpBody = try JSONEncoder().encode(ClaimRequest(
             publicId: publicId,
             appUserId: appUserId,
-            code: trimmedCode,
+            reference: reference,
             firstSeenAt: ISO8601DateFormatter().string(from: firstSeenAt)
         ))
 
@@ -86,14 +109,28 @@ public final class Tolt: @unchecked Sendable {
 private struct ClaimRequest: Encodable {
     let publicId: String
     let appUserId: String
-    let code: String
+    let reference: ClaimReference
     let firstSeenAt: String
 
     enum CodingKeys: String, CodingKey {
         case publicId = "public_id"
         case appUserId = "app_user_id"
         case code
+        case clickId = "click_id"
         case firstSeenAt = "first_seen_at"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(publicId, forKey: .publicId)
+        try container.encode(appUserId, forKey: .appUserId)
+        try container.encode(firstSeenAt, forKey: .firstSeenAt)
+        switch reference {
+        case .code(let code):
+            try container.encode(code, forKey: .code)
+        case .click(let clickId):
+            try container.encode(clickId, forKey: .clickId)
+        }
     }
 }
 
