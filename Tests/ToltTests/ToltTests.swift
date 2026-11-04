@@ -106,6 +106,36 @@ final class ToltTests: XCTestCase {
         XCTAssertEqual(first, later)
     }
 
+    func testClaimsWithAClickId() async throws {
+        StubProtocol.handler = { _ in (200, #"{"success":true,"data":{"status":"claimed","app_user_id":"u"}}"#) }
+        _ = try await tolt.claim(clickId: " clk_123 ", appUserId: "u")
+        XCTAssertEqual(StubProtocol.lastBody?["click_id"] as? String, "clk_123")
+        XCTAssertNil(StubProtocol.lastBody?["code"])
+    }
+
+    func testClaimsFromADeepLink() async throws {
+        StubProtocol.handler = { _ in (200, #"{"success":true,"data":{"status":"claimed","app_user_id":"u"}}"#) }
+        let result = try await tolt.claim(url: URL(string: "myapp://claim?tolt_code=ANNA20&tolt_click=clk_9")!, appUserId: "u")
+        XCTAssertEqual(result?.status, .claimed)
+        XCTAssertEqual(StubProtocol.lastBody?["click_id"] as? String, "clk_9")
+    }
+
+    func testIgnoresLinksWithoutToltParameters() async throws {
+        StubProtocol.handler = { _ in
+            XCTFail("should not call the server")
+            return (500, "{}")
+        }
+        let result = try await tolt.claim(url: URL(string: "https://example.com/promo?ref=x")!, appUserId: "u")
+        XCTAssertNil(result)
+    }
+
+    func testReadsReferencesFromURLs() {
+        XCTAssertEqual(ClaimReference(url: URL(string: "myapp://claim?tolt_code=ANNA20")!), .code("ANNA20"))
+        XCTAssertEqual(ClaimReference(url: URL(string: "https://app.example.com/i?tolt_click=clk_1&tolt_code=A")!), .click("clk_1"))
+        XCTAssertEqual(ClaimReference(url: URL(string: "myapp://claim?tolt_click=&tolt_code=A")!), .code("A"))
+        XCTAssertNil(ClaimReference(url: URL(string: "myapp://claim")!))
+    }
+
     func testRevenueCatAttributes() {
         XCTAssertEqual(Tolt.revenueCatAttributes(code: " ANNA20 "), ["tolt_code": "ANNA20"])
     }
